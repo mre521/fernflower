@@ -104,7 +104,7 @@ public class IdentifierConverter implements NewClassNameBuilder {
         }
       }
 
-      renameClassIdentifiers(cl, names);
+      renameClassIdentifiers(cl, names, node.getSubclasses());
 
       if (!node.getSubclasses().isEmpty()) {
         classNameMaps.put(cl.qualifiedName, names);
@@ -128,7 +128,7 @@ public class IdentifierConverter implements NewClassNameBuilder {
       }
     }
 
-    renameClassIdentifiers(cl, names);
+    renameClassIdentifiers(cl, names, null);
 
     return names;
   }
@@ -151,7 +151,7 @@ public class IdentifierConverter implements NewClassNameBuilder {
         }
       }
 
-      renameClassIdentifiers(cl, names);
+      renameClassIdentifiers(cl, names, node.getSubclasses());
 
       interfaceNameMaps.put(cl.qualifiedName, names);
     }
@@ -192,8 +192,26 @@ public class IdentifierConverter implements NewClassNameBuilder {
       interceptor.addName(classOldFullName, classNewFullName);
     }
   }
+  
+  private static List<ClassWrapperNode> getAllSubclasses(List<ClassWrapperNode> directSubclasses) {
+      List<ClassWrapperNode> subclasses = new LinkedList<ClassWrapperNode>();
+      subclasses.addAll(directSubclasses);
+      
+      for(ClassWrapperNode node: directSubclasses) {
+          if(node.getSubclasses().size() > 0) {
+              /* recursive step */
+              subclasses.addAll(getAllSubclasses(node.getSubclasses()));
+          }
+          else {
+              /* base case */
+              continue;
+          }
+      }
+      
+      return subclasses;
+  }
 
-  private void renameClassIdentifiers(StructClass cl, Map<String, String> names) {
+  private void renameClassIdentifiers(StructClass cl, Map<String, String> names, List<ClassWrapperNode> subclasses) {
     // all classes are already renamed
     String classOldFullName = cl.qualifiedName;
     String classNewFullName = interceptor.getName(classOldFullName);
@@ -201,6 +219,29 @@ public class IdentifierConverter implements NewClassNameBuilder {
     if (classNewFullName == null) {
       classNewFullName = classOldFullName;
     }
+    
+    /* Added code ***********************************************************/
+    List<String> subclassOldFullNames = new LinkedList<String>();
+    List<String> subclassNewFullNames = new LinkedList<String>();
+    if(subclasses != null && subclasses.size() > 0) {
+        StructClass subCl;
+        String subclassOldFullName;
+        String subclassNewFullName;
+        for(ClassWrapperNode subclass: getAllSubclasses(subclasses)) {
+            subCl = subclass.getClassStruct();
+            
+            subclassOldFullName = subCl.qualifiedName;
+            subclassNewFullName = interceptor.getName(subclassOldFullName);
+
+            if (subclassNewFullName == null) {
+              subclassNewFullName = classOldFullName;
+            }
+            
+            subclassOldFullNames.add(subclassOldFullName);
+            subclassNewFullNames.add(subclassNewFullName);
+        }
+    }
+    /* **********************************************************************/
 
     // methods
     HashSet<String> setMethodNames = new HashSet<String>();
@@ -240,6 +281,15 @@ public class IdentifierConverter implements NewClassNameBuilder {
 
         interceptor.addName(classOldFullName + " " + mt.getName() + " " + mt.getDescriptor(),
                             classNewFullName + " " + name + " " + buildNewDescriptor(false, mt.getDescriptor()));
+        
+        /* Added code ***********************************************************/
+        if(subclassOldFullNames.size() > 0) {
+            for(int j = 0; j < subclassOldFullNames.size(); j++) {
+                interceptor.addName(subclassOldFullNames.get(j) + " " + mt.getName() + " " + mt.getDescriptor(),
+                                    subclassNewFullNames.get(j) + " " + name + " " + buildNewDescriptor(false, mt.getDescriptor()));
+            }
+        }
+        /* **********************************************************************/
       }
     }
 
@@ -265,6 +315,15 @@ public class IdentifierConverter implements NewClassNameBuilder {
 
         interceptor.addName(classOldFullName + " " + fd.getName() + " " + fd.getDescriptor(),
                             classNewFullName + " " + newName + " " + buildNewDescriptor(true, fd.getDescriptor()));
+        
+        /* Added code ***********************************************************/
+        if(subclassOldFullNames.size() > 0) {
+            for(int j = 0; j < subclassOldFullNames.size(); j++) {
+                interceptor.addName(subclassOldFullNames.get(j) + " " + fd.getName() + " " + fd.getDescriptor(),
+                                    subclassNewFullNames.get(j) + " " + newName + " " + buildNewDescriptor(true, fd.getDescriptor()));
+            }
+        }
+        /* **********************************************************************/
       }
     }
   }
